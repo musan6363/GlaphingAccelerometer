@@ -77,7 +77,7 @@ Python
 
 ## 単体の加速度センサで値を取得する
 
-1. GitHub上のTags"SingleICM"を選択
+1. GitHub上のブランチ"SingleICM"を選択
 
 2. 以下のファイルをmbedのワークスペースにコピーする．
 
@@ -113,15 +113,15 @@ Python
 - ![単一センサの実行例](img/単一センサの実行例.png)
 
   　`imu.getAGMT(true)`で設定ファイルの取得と3軸加速度，3軸ジャイロ，3軸磁気，温度の取得が可能．
-  　`imu.getAGMT(false)`で設定ファイルの取得を省略(実行速度がほぼ倍になる)[[選択中]]
-  　`imu.getAG(false)`で3軸加速度と3軸ジャイロのみを取得する．
+    　`imu.getAGMT(false)`で設定ファイルの取得を省略(実行速度がほぼ倍になる)[[選択中]]
+    　`imu.getAG(false)`で3軸加速度と3軸ジャイロのみを取得する．
 
 - 結果をCSVに書き出してグラフ化した例．
   - Acc<img src="img/acccsv.png" alt="acccsv" style="zoom:50%;" />
   - Gyr<img src="img/gyrcsv.png" alt="gyrcsv" style="zoom:50%;" />
   - Mag<img src="img/magcsv.png" alt="magcsv" style="zoom:50%;" />
   - Tmp<img src="img/tmpcsv.png" alt="tmpcsv" style="zoom:50%;" />
-  - GitHub上のTags"SingleICM(CSV)"にあるmain.cppと置き換えれば実行可能．
+  - GitHub上のブランチ"SingleICM(CSV)"にあるmain.cppと置き換えれば実行可能．
     - mbed上にcsvファイルを書き出します．実行中は**mbedへアクセスできなくなる**ので注意．
 
 
