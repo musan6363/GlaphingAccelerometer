@@ -6,14 +6,11 @@
 #define QWIIC_MUX_DEFAULT_ADDRESS 0xE0 // 0x70 << 1
 #define DEV_NUM 4
 
-/*
-デバイスの数だけimuインスタンスを作成する必要がある．
-実行ファイルのサイズはそれほど大きくならない．
-*/
 ICM_20948_I2C imu[DEV_NUM];
 
 void loop();
 void printScaledAGMT( ICM_20948_I2C *sensor );
+void printScaledAcceleration( ICM_20948_I2C *sensor );
 BufferedSerial pc(USBTX, USBRX);
 SerialStream<BufferedSerial> debug_ss(pc);
 
@@ -168,14 +165,15 @@ void loop(){
             }
             if( imu[i].dataReady() ){
                 // imu[i].getAGMT(true);  // 1350 ns interval
-                imu[i].getAGMT(false);  // 786 ns interval
-                // imu[i].getAG(false); // 526 ns interval
+                // imu[i].getAGMT(false);  // 786 ns interval
+                imu[i].getAG(false); // 526 ns interval
                 // なんか、色々ロードしてる, rangeとか
                 e = t.elapsed_time().count();  //  for one sampling ,  to cut loading settings
                 s = t.elapsed_time().count();
                 // printRawAGMT( myICM.agmt );     // Uncomment this to see the raw values, taken directly from the agmt structure
-                printf("%d ::: ", i);
-                printScaledAGMT( &imu[i] );   // This function takes into account the scale settings from when the measurement was made to calculate the values with units
+                printf("sid%d:", i);
+                // printScaledAGMT( &imu[i] );   // This function takes into account the scale settings from when the measurement was made to calculate the values with units
+                printScaledAcceleration( &imu[i] );
             }else{
                printf("Waiting for data\n");
                wait_us(500*1000);
@@ -193,5 +191,11 @@ void printScaledAGMT( ICM_20948_I2C *sensor ){
     sensor->gyrX(), sensor->gyrY(), sensor->gyrZ(), 
     sensor->magX(), sensor->magY(), sensor->magZ(), 
     sensor->temp()
+    );
+}
+
+void printScaledAcceleration( ICM_20948_I2C *sensor ){
+    printf("%.2f,%.2f,%.2f\n",
+    sensor->accX(), sensor->accY(), sensor->accZ()
     );
 }

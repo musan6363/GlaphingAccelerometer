@@ -1,10 +1,10 @@
 .build
 .mbed
 projectfiles
-*.py*
 mbed-os
 mbed-os.lib
 BUILD
 
 .DS_Store
 SerialStream
+*.csv
