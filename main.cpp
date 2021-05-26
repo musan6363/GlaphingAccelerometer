@@ -2,9 +2,11 @@
 #include "mbed.h"
 #include "SerialStream.h"
 
-void printScaledAGMT( ICM_20948_I2C *sensor );
+void printScaledAGMT( ICM_20948_I2C *sensor, FILE** fpp );
 BufferedSerial pc(USBTX, USBRX);
 SerialStream<BufferedSerial> debug_ss(pc);
+
+LocalFileSystem local("local");  // mbed自身からmbedのストレージにアクセスする．
 
 // main() runs in its own thread in the OS
 int main()
@@ -108,32 +110,57 @@ int main()
         printf("startupMagnetometer returned: %s\n", imu.statusString());
     }
 
+    FILE *fp;
+    if ( NULL == (fp = fopen( "/local/output.csv", "w" )) ){
+        error( "" );
+    }
+    fprintf( fp, "Acc (mg) , , , ,"\
+                 "Gyr (DPS), , , ,"\
+                 "Mag (uT) , , , ,"\
+                 "Tmp (C)\n"
+    );
+    fprintf( fp, "accX, accY, accZ,  ,"\
+    "gyrX, gyrY, gyrZ,  ,"\
+    "magX, magY, magZ,  ,"\
+    "temp\n"
+    );
+
     Timer t;
     t.start();
     int s = 0,e = 0;
-    while (true) {
+    for (int i = 0; i < 500; i++){
         if( imu.dataReady() ){
             // imu.getAGMT(true);  // 1350 ns interval
             imu.getAGMT(false);  // 786 ns interval
             // imu.getAG(false); // 526 ns interval
             // なんか、色々ロードしてる, rangeとか
             e = t.elapsed_time().count();  //  for one sampling ,  to cut loading settings
-            printf("%d ns\n", e-s);
+            printf("%d ::: %d ns\n", i, e-s);
             s = t.elapsed_time().count();
             // printRawAGMT( myICM.agmt );     // Uncomment this to see the raw values, taken directly from the agmt structure
-            printScaledAGMT( &imu );   // This function takes into account the scale settings from when the measurement was made to calculate the values with units
+            printScaledAGMT( &imu, &fp );   // This function takes into account the scale settings from when the measurement was made to calculate the values with units
         }else{
            printf("Waiting for data\n");
            wait_us(500*1000);
         }
     }
+    fclose(fp);
 }
 
-void printScaledAGMT( ICM_20948_I2C *sensor ){
+void printScaledAGMT( ICM_20948_I2C *sensor, FILE** fpp ){
     printf("Scaled. Acc (mg) [ %.2f, %.2f, %.2f ], "\
     "Gyr (DPS) [ %.2f, %.2f, %.2f ], "\
     "Mag (uT) [ %.2f, %.2f, %.2f  ], "\
     "Tmp (C) [ %.2f ]\n",
+    sensor->accX(), sensor->accY(), sensor->accZ(),
+    sensor->gyrX(), sensor->gyrY(), sensor->gyrZ(), 
+    sensor->magX(), sensor->magY(), sensor->magZ(), 
+    sensor->temp()
+    );
+    fprintf( *fpp, "%.2f, %.2f, %.2f,  ,"\
+    "%.2f, %.2f, %.2f,  ,"\
+    "%.2f, %.2f, %.2f,  ,"\
+    "%.2f\n",
     sensor->accX(), sensor->accY(), sensor->accZ(),
     sensor->gyrX(), sensor->gyrY(), sensor->gyrZ(), 
     sensor->magX(), sensor->magY(), sensor->magZ(), 
