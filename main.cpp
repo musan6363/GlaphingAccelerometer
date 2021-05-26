@@ -2,9 +2,34 @@
 #include "mbed.h"
 #include "SerialStream.h"
 
+// #define QWIIC_MUX_DEFAULT_ADDRESS 0x70
+#define QWIIC_MUX_DEFAULT_ADDRESS 0xE0 // 0x70 << 1
+#define DEV_NUM 4
+
+/*
+デバイスの数だけimuインスタンスを作成する必要がある．
+実行ファイルのサイズはそれほど大きくならない．
+*/
+ICM_20948_I2C imu[DEV_NUM];
+
+void loop();
 void printScaledAGMT( ICM_20948_I2C *sensor );
 BufferedSerial pc(USBTX, USBRX);
 SerialStream<BufferedSerial> debug_ss(pc);
+
+I2C i2c(I2C_SDA1, I2C_SCL1);  // I2Cの通信を行うピンの指定．data line(p9)とclock line(p10)
+
+int mux_select(int num)
+{
+    const char mux_port = 0x01 << num;
+    int status = i2c.write(QWIIC_MUX_DEFAULT_ADDRESS, &mux_port, 1);
+    if (status)
+    {
+        return status;
+    }
+    wait_us(10);
+    return status;
+}
 
 // main() runs in its own thread in the OS
 int main()
@@ -17,38 +42,13 @@ int main()
      *  @param sda I2C data line pin
      *  @param scl I2C clock line pin
      */
-    I2C i2c(I2C_SDA1, I2C_SCL1);  // I2Cの通信を行うピンの指定．data line(p9)とclock line(p10)
+
     i2c.frequency(400*1000);  // I2Cインターフェイスの周波数を400kHzに設定
 
-    ICM_20948_I2C imu;
-    imu.enableDebugging(debug_ss);
-    do{
-        imu.begin(i2c);
-        printf("%s\n", imu.statusString());
-        if( imu.status != ICM_20948_Stat_Ok ){
-            printf( "Trying again...\n" );
-            wait_us(500*1000);
-        }else{
-            break;
-        }
-    }while(1);
-
-    // Here we are doing a SW reset to make sure the device starts in a known state
-    imu.swReset( );
-    if( imu.status != ICM_20948_Stat_Ok){
-        printf("Software Reset returned: %s\n", imu.statusString());
-    }
-    wait_us(250*1000);
-
-      // Now wake the sensor up
-    imu.sleep( false );
-    imu.lowPower( false );
-
-    imu.setSampleMode( (ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), ICM_20948_Sample_Mode_Continuous );
-    if( imu.status != ICM_20948_Stat_Ok){
-        printf("setSampleMode returned: %s\n", imu.statusString());
-    }
-
+    /*
+    もともと使う都度呼び出されていた設定情報を上でまとめた．
+    センサの初期化で複数回定義されることを防ぐため．
+    */
     // Set full scale ranges for both acc and gyr
     ICM_20948_fss_t myFSS;  // This uses a "Full Scale Settings" structure that can contain values for all configurable sensors
 
@@ -63,11 +63,6 @@ int main()
                             // dps500
                             // dps1000
                             // dps2000
-
-    imu.setFullScale( (ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myFSS );
-    if( imu.status != ICM_20948_Stat_Ok){
-        printf("setFullScale returned: %s\n", imu.statusString());
-    }
 
     // Set up Digital Low-Pass Filter configuration
     ICM_20948_dlpcfg_t myDLPcfg;            // Similar to FSS, this uses a configuration structure for the desired sensors
@@ -90,49 +85,109 @@ int main()
                                             // gyr_d5bw7_n8bw9
                                             // gyr_d361bw4_n376bw5
 
-    imu.setDLPFcfg( (ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myDLPcfg );
-    if( imu.status != ICM_20948_Stat_Ok){
-        printf("setDLPcfg returned: %s\n", imu.statusString());
+    // 全てのセンサの初期化
+    for (int i = 0; i < DEV_NUM; i++) {
+        // センサの切り替え ここから
+        int status;
+        status = mux_select(i);
+        if (status)
+        {
+            printf("01 ::: MUX Select failed on dev %d : error = %d \n", 0, status);
+            while (1)
+                ;
+        }
+        // センサの切り替え ここまで
+
+        imu[i].enableDebugging(debug_ss);
+        do{
+            imu[i].begin(i2c);
+            printf("%s\n", imu[i].statusString());
+            if( imu[i].status != ICM_20948_Stat_Ok ){
+                printf( "Trying again...\n" );
+                wait_us(500*1000);
+            }else{
+                break;
+            }
+        }while(1);
+
+        // Here we are doing a SW reset to make sure the device starts in a known state
+        imu[i].swReset( );
+        if( imu[i].status != ICM_20948_Stat_Ok){
+            printf("Software Reset returned: %s\n", imu[i].statusString());
+        }
+        wait_us(250*1000);
+
+        // Now wake the sensor up
+        imu[i].sleep( false );
+        imu[i].lowPower( false );
+
+        imu[i].setSampleMode( (ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), ICM_20948_Sample_Mode_Continuous );
+        if( imu[i].status != ICM_20948_Stat_Ok){
+            printf("setSampleMode returned: %s\n", imu[i].statusString());
+        }
+
+        imu[i].setFullScale( (ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myFSS );
+        if( imu[i].status != ICM_20948_Stat_Ok){
+            printf("setFullScale returned: %s\n", imu[i].statusString());
+        }
+
+        imu[i].setDLPFcfg( (ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myDLPcfg );
+        if( imu[i].status != ICM_20948_Stat_Ok){
+            printf("setDLPcfg returned: %s\n", imu[i].statusString());
+        }
+        // Choose whether or not to use DLPF
+        // Here we're also showing another way to access the status values, and that it is OK to supply individual sensor masks to these functions
+        ICM_20948_Status_e accDLPEnableStat = imu[i].enableDLPF( ICM_20948_Internal_Acc, false );
+        ICM_20948_Status_e gyrDLPEnableStat = imu[i].enableDLPF( ICM_20948_Internal_Gyr, false );
+        printf("Enable DLPF for Accelerometer returned: %s\n", imu[i].statusString(accDLPEnableStat));
+        printf("Enable DLPF for Gyroscope returned: %s\n", imu[i].statusString(gyrDLPEnableStat));
+
+        // Choose whether or not to start the magnetometer
+        imu[i].startupMagnetometer();
+        if( imu[i].status != ICM_20948_Stat_Ok){
+            printf("startupMagnetometer returned: %s\n", imu[i].statusString());
+        }
     }
 
-    // Choose whether or not to use DLPF
-    // Here we're also showing another way to access the status values, and that it is OK to supply individual sensor masks to these functions
-    ICM_20948_Status_e accDLPEnableStat = imu.enableDLPF( ICM_20948_Internal_Acc, false );
-    ICM_20948_Status_e gyrDLPEnableStat = imu.enableDLPF( ICM_20948_Internal_Gyr, false );
-    printf("Enable DLPF for Accelerometer returned: %s\n", imu.statusString(accDLPEnableStat));
-    printf("Enable DLPF for Gyroscope returned: %s\n", imu.statusString(gyrDLPEnableStat));
+    loop();
+}
 
-    // Choose whether or not to start the magnetometer
-    imu.startupMagnetometer();
-    if( imu.status != ICM_20948_Stat_Ok){
-        printf("startupMagnetometer returned: %s\n", imu.statusString());
-    }
-
+void loop(){    
     Timer t;
     t.start();
     int s = 0,e = 0;
+    int status;
     while (true) {
-        if( imu.dataReady() ){
-            // imu.getAGMT(true);  // 1350 ns interval
-            imu.getAGMT(false);  // 786 ns interval
-            // imu.getAG(false); // 526 ns interval
-            // なんか、色々ロードしてる, rangeとか
-            e = t.elapsed_time().count();  //  for one sampling ,  to cut loading settings
-            printf("%d ns\n", e-s);
-            s = t.elapsed_time().count();
-            // printRawAGMT( myICM.agmt );     // Uncomment this to see the raw values, taken directly from the agmt structure
-            printScaledAGMT( &imu );   // This function takes into account the scale settings from when the measurement was made to calculate the values with units
-        }else{
-           printf("Waiting for data\n");
-           wait_us(500*1000);
+        for (int i = 0; i < DEV_NUM; i++) {
+            status = mux_select(i);
+            if (status)
+            {
+                printf("02 ::: MUX Select failed on dev %d : error = %d \n", i, status);
+                while (1)
+                    ;
+            }
+            if( imu[i].dataReady() ){
+                // imu[i].getAGMT(true);  // 1350 ns interval
+                imu[i].getAGMT(false);  // 786 ns interval
+                // imu[i].getAG(false); // 526 ns interval
+                // なんか、色々ロードしてる, rangeとか
+                e = t.elapsed_time().count();  //  for one sampling ,  to cut loading settings
+                s = t.elapsed_time().count();
+                // printRawAGMT( myICM.agmt );     // Uncomment this to see the raw values, taken directly from the agmt structure
+                printf("%d ::: ", i);
+                printScaledAGMT( &imu[i] );   // This function takes into account the scale settings from when the measurement was made to calculate the values with units
+            }else{
+               printf("Waiting for data\n");
+               wait_us(500*1000);
+            }
         }
     }
 }
 
 void printScaledAGMT( ICM_20948_I2C *sensor ){
-    printf("Scaled. Acc (mg) [ %.2f, %.2f, %.2f ], "\
-    "Gyr (DPS) [ %.2f, %.2f, %.2f ], "\
-    "Mag (uT) [ %.2f, %.2f, %.2f  ], "\
+    printf("Scaled. Acc (mg) [ %.2f, %.2f, %.2f ], \t"\
+    "Gyr (DPS) [ %.2f, %.2f, %.2f ], \t"\
+    "Mag (uT) [ %.2f, %.2f, %.2f  ], \t"\
     "Tmp (C) [ %.2f ]\n",
     sensor->accX(), sensor->accY(), sensor->accZ(),
     sensor->gyrX(), sensor->gyrY(), sensor->gyrZ(), 
